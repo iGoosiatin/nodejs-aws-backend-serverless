@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/iGoosiatin/nodejs-aws-product-service#readme",
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.147",
     "eslint": "^9.20.1",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.3",
