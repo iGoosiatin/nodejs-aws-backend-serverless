@@ -6,6 +6,8 @@
   "scripts": {
     "lint": "eslint .",
     "build": "tsc",
+    "cdk:bootstrap": "npx cdk bootstrap",
+    "cdk:deploy": "npm run build && npx cdk deploy",
     "test": "jest"
   },
   "repository": {
@@ -19,7 +21,10 @@
   },
   "homepage": "https://github.com/iGoosiatin/nodejs-aws-product-service#readme",
   "devDependencies": {
+    "@aws-cdk/aws-apigatewayv2": "^1.203.0",
+    "@aws-cdk/aws-apigatewayv2-integrations": "^1.203.0",
     "@types/aws-lambda": "^8.10.147",
+    "aws-cdk-lib": "^2.180.0",
     "eslint": "^9.20.1",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.3",

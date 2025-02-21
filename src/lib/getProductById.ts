@@ -1,5 +1,6 @@
-import { products } from 'mocks/products';
+import { products } from '../mocks/products';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { headers } from './helpers';
 
 const getProductById = (id: string) => products.find(product => product.id === id);
 
@@ -8,6 +9,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   if (!productId) {
     return {
       statusCode: 400,
+      headers,
       body: JSON.stringify({
         message: 'productId is required',
       }),
@@ -19,6 +21,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
   if (!product) {
     return {
       statusCode: 404,
+      headers,
       body: JSON.stringify({
         message: 'Product not found',
       }),
@@ -27,6 +30,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   return {
     statusCode: 200,
+    headers,
     body: JSON.stringify(product),
   };
 };
