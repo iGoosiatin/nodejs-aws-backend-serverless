@@ -1,0 +1,39 @@
+{
+  "name": "nodejs-aws-product-service",
+  "version": "1.0.0",
+  "description": "Rolling Scopes School. Cloud developer course, 2025",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "build": "tsc",
+    "cdk:bootstrap": "npx cdk bootstrap",
+    "cdk:deploy": "npm run build && npx cdk deploy",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iGoosiatin/nodejs-aws-product-service.git"
+  },
+  "author": "Ilja Gusiatin",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/iGoosiatin/nodejs-aws-product-service/issues"
+  },
+  "homepage": "https://github.com/iGoosiatin/nodejs-aws-product-service#readme",
+  "devDependencies": {
+    "@aws-cdk/aws-apigatewayv2": "^1.203.0",
+    "@aws-cdk/aws-apigatewayv2-integrations": "^1.203.0",
+    "@types/aws-lambda": "^8.10.147",
+    "@types/jest": "^29.5.14",
+    "aws-cdk-lib": "^2.180.0",
+    "eslint": "^9.20.1",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-prettier": "^5.2.3",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.24.1"
+  }
+}

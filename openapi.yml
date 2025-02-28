@@ -1,0 +1,73 @@
+openapi: 3.0.0
+info:
+  title: Products API
+  version: '1.0'
+  description: Products API for RS School AWS Cloud developer course 2025
+
+paths:
+  /products:
+    get:
+      summary: Get products list
+      operationId: getProductsList
+      responses:
+        '200':
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Product'
+        '500':
+          description: Internal server error
+
+  /products/{productId}:
+    get:
+      summary: Get product by ID
+      operationId: getProductById
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID of the product to retrieve
+      responses:
+        '200':
+          description: Retrieved product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          description: Bad request - Missing productId
+        '404':
+          description: Product not found
+        '500':
+          description: Internal server error
+
+components:
+  schemas:
+    Product:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier for the product
+        title:
+          type: string
+          description: The name/title of the product
+        description:
+          type: string
+          description: Detailed description of the product
+        price:
+          type: number
+          format: float
+          description: The price of the product
+
+servers:
+  - url: https://56eedk1s6e.execute-api.us-east-1.amazonaws.com/
+    description: Base API URL
