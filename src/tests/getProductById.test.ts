@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent } from 'aws-lambda';
-import { handler } from '../lib/getProductById';
+import * as lambda from '../lib/getProductById';
 import { products } from '../mocks/products';
 
-const product = products[0];
+const product = { ...products[0], count: 0 };
 
 const basicMockEvent = {
   httpMethod: 'GET',
@@ -14,13 +14,20 @@ const basicMockEvent = {
 } as APIGatewayProxyEvent;
 
 describe('getProductById Lambda', () => {
+  beforeEach(() => {
+    jest.spyOn(lambda, 'getProductById').mockImplementation(async (id: string) => {
+      const product = products.find(product => product.id === id);
+      return product ? { ...product, count: 0 } : null;
+    });
+  });
+
   it('should return product when valid productId is provided', async () => {
     const mockEvent = {
       ...basicMockEvent,
       pathParameters: { productId: product.id },
     };
 
-    const response = await handler(mockEvent);
+    const response = await lambda.handler(mockEvent);
     const body = JSON.parse(response.body);
 
     expect(response.statusCode).toBe(200);
@@ -33,13 +40,13 @@ describe('getProductById Lambda', () => {
       pathParameters: { productId: 'non-existing-product-id' },
     };
 
-    const response = await handler(mockEvent);
+    const response = await lambda.handler(mockEvent);
 
     expect(response.statusCode).toBe(404);
   });
 
   it('should return 400 when productId is missing', async () => {
-    const response = await handler(basicMockEvent);
+    const response = await lambda.handler(basicMockEvent);
 
     expect(response.statusCode).toBe(400);
   });
