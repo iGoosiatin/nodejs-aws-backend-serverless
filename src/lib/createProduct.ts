@@ -1,6 +1,6 @@
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import crypto from 'crypto';
 
 import { eventLogger, headers } from './helpers';
@@ -74,6 +74,7 @@ export const createProduct = async (newProduct: NewValidProduct) => {
 
   const id = crypto.randomUUID();
   const { title, description, price, count } = newProduct;
+
   const product: Product = {
     id,
     title,
@@ -85,10 +86,24 @@ export const createProduct = async (newProduct: NewValidProduct) => {
     count,
   };
 
-  const productCommand = new PutCommand({ TableName: productsTable, Item: product });
-  const stockCommand = new PutCommand({ TableName: stocksTable, Item: stock });
+  const transactionCommand = new TransactWriteCommand({
+    TransactItems: [
+      {
+        Put: {
+          TableName: productsTable,
+          Item: product,
+        },
+      },
+      {
+        Put: {
+          TableName: stocksTable,
+          Item: stock,
+        },
+      },
+    ],
+  });
 
-  await Promise.all([docClient.send(productCommand), docClient.send(stockCommand)]);
+  await docClient.send(transactionCommand);
 
   return {
     id,
@@ -138,7 +153,6 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
 
   try {
     const product = await createProduct(possiblyProduct);
-
     return {
       statusCode: 201,
       headers,
