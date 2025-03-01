@@ -2,7 +2,7 @@ import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 
-import { headers } from './helpers';
+import { eventLogger, headers } from './helpers';
 import { Product } from 'types/product';
 import { Stock } from 'types/stock';
 
@@ -40,6 +40,7 @@ export const getProductById = async (id: string) => {
 };
 
 export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+  eventLogger(event);
   const productId = event.pathParameters?.productId;
   if (!productId) {
     return {

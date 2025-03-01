@@ -3,7 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import crypto from 'crypto';
 
-import { headers } from './helpers';
+import { eventLogger, headers } from './helpers';
 import { Product } from 'types/product';
 import { Stock } from 'types/stock';
 
@@ -97,6 +97,7 @@ export const createProduct = async (newProduct: NewValidProduct) => {
 };
 
 export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+  eventLogger(event);
   const body = event.body as string | Record<string, unknown> | undefined;
   if (!body) {
     return {
