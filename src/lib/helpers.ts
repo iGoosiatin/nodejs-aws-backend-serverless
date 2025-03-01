@@ -1,4 +1,4 @@
-import { APIGatewayProxyEventV2 } from 'aws-lambda';
+import { APIGatewayProxyEvent } from 'aws-lambda';
 
 export const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -6,5 +6,5 @@ export const headers = {
   'Access-Control-Allow-Methods': 'GET,POST',
 };
 
-export const eventLogger = (event: APIGatewayProxyEventV2): void =>
+export const eventLogger = (event: APIGatewayProxyEvent): void =>
   console.log('Received request:', JSON.stringify(event, null, 2));

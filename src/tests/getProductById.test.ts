@@ -1,6 +1,10 @@
-import { APIGatewayProxyEventV2 } from 'aws-lambda';
+import { APIGatewayProxyEvent } from 'aws-lambda';
 import * as lambda from '../lib/getProductById';
 import { products } from '../mocks/products';
+
+jest.mock('../lib/helpers', () => ({
+  eventLogger: jest.fn(),
+}));
 
 const product = { ...products[0], count: 0 };
 
@@ -11,7 +15,7 @@ const basicMockEvent = {
   queryStringParameters: null,
   pathParameters: null,
   body: null,
-} as APIGatewayProxyEventV2;
+} as APIGatewayProxyEvent;
 
 describe('getProductById Lambda', () => {
   beforeEach(() => {

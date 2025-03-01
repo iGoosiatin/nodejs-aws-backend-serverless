@@ -1,4 +1,4 @@
-import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import crypto from 'crypto';
@@ -64,7 +64,7 @@ const isValidNewProduct = (possiblyProduct: unknown): possiblyProduct is NewVali
 };
 
 // exported for testing purposes
-export const createProduct = async (newProduct: NewValidProduct) => {
+export const createProduct = async (newProduct: NewValidProduct): Promise<AvailableProduct> => {
   const productsTable = process.env.PRODUCTS_TABLE;
   const stocksTable = process.env.STOCKS_TABLE;
 
@@ -111,7 +111,7 @@ export const createProduct = async (newProduct: NewValidProduct) => {
   };
 };
 
-export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   eventLogger(event);
   const body = event.body as string | Record<string, unknown> | undefined;
   if (!body) {
