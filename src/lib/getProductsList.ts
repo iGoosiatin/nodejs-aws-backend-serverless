@@ -1,4 +1,4 @@
-import { APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyResultV2 } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { headers } from './helpers';
@@ -43,7 +43,7 @@ export const getProductsList = async () => {
   return productsWithStocks;
 };
 
-export const handler = async (): Promise<APIGatewayProxyResult> => {
+export const handler = async (): Promise<APIGatewayProxyResultV2> => {
   try {
     const products = await getProductsList();
 

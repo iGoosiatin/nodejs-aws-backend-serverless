@@ -20,6 +20,54 @@ paths:
                   $ref: '#/components/schemas/Product'
         '500':
           description: Internal server error
+    post:
+      summary: Create a new product
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - description
+                - price
+                - count
+              properties:
+                title:
+                  type: string
+                  description: The name/title of the product
+                description:
+                  type: string
+                  description: Detailed description of the product
+                price:
+                  type: number
+                  format: float
+                  description: The price of the product
+                count:
+                  type: integer
+                  format: int32
+                  description: The quantity of the product in stock
+      responses:
+        '201':
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          description: Bad request - Invalid input
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Error message describing the validation failure
+        '500':
+          description: Internal server error
 
   /products/{productId}:
     get:
@@ -40,9 +88,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
         '400':
-          description: Bad request - Missing productId
+          description: Bad request - missing productId
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Error message
         '404':
           description: Product not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Error message
         '500':
           description: Internal server error
 
@@ -67,6 +131,10 @@ components:
           type: number
           format: float
           description: The price of the product
+        stock:
+          type: integer
+          format: int32
+          description: The quantity of the product in stock
 
 servers:
   - url: https://56eedk1s6e.execute-api.us-east-1.amazonaws.com/

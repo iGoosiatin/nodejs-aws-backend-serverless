@@ -1,4 +1,4 @@
-import { APIGatewayProxyEvent } from 'aws-lambda';
+import { APIGatewayProxyEventV2 } from 'aws-lambda';
 import * as lambda from '../lib/getProductById';
 import { products } from '../mocks/products';
 
@@ -11,7 +11,7 @@ const basicMockEvent = {
   queryStringParameters: null,
   pathParameters: null,
   body: null,
-} as APIGatewayProxyEvent;
+} as APIGatewayProxyEventV2;
 
 describe('getProductById Lambda', () => {
   beforeEach(() => {
