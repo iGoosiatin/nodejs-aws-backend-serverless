@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import * as cdk from 'aws-cdk-lib';
+import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayIntegrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -23,27 +24,45 @@ export class ProductsApiStack extends cdk.Stack {
     const stocksTable = dynamodb.Table.fromTableName(this, 'StocksTable', environment.STOCKS_TABLE);
 
     // Create Lambda for getting products list
-    const getProductsListFunction = new lambda.Function(this, 'GetProductsListHandler', {
+    const getProductsListFunction = new nodejs.NodejsFunction(this, 'GetProductsListHandler', {
       runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'lib/getProductsList.handler',
-      code: lambda.Code.fromAsset('build'),
+      entry: 'src/product-service/lib/getProductsList.ts',
+      handler: 'handler',
       environment,
+      bundling: {
+        minify: true,
+        sourceMap: false,
+        target: 'es2022',
+        externalModules: ['aws-sdk'],
+      },
     });
 
     // Create Lambda for getting product by ID
-    const getProductByIdFunction = new lambda.Function(this, 'GetProductByIdHandler', {
+    const getProductByIdFunction = new nodejs.NodejsFunction(this, 'GetProductByIdHandler', {
       runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'lib/getProductById.handler',
-      code: lambda.Code.fromAsset('build'),
+      entry: 'src/product-service/lib/getProductById.ts',
+      handler: 'handler',
       environment,
+      bundling: {
+        minify: true,
+        sourceMap: false,
+        target: 'es2022',
+        externalModules: ['aws-sdk'],
+      },
     });
 
     // Create Lambda for creating product
-    const createProductFunction = new lambda.Function(this, 'CreateProductHandler', {
+    const createProductFunction = new nodejs.NodejsFunction(this, 'CreateProductHandler', {
       runtime: lambda.Runtime.NODEJS_22_X,
-      handler: 'lib/createProduct.handler',
-      code: lambda.Code.fromAsset('build'),
+      entry: 'src/product-service/lib/createProduct.ts',
+      handler: 'handler',
       environment,
+      bundling: {
+        minify: true,
+        sourceMap: false,
+        target: 'es2022',
+        externalModules: ['aws-sdk'],
+      },
     });
 
     // Grant DynamoDB read permissions to the function

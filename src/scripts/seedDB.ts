@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, BatchWriteCommand } from '@aws-sdk/lib-dynamodb';
-import { products } from 'mocks/products';
-import { stocks } from 'mocks/stocks';
+import { products } from '../mocks/products';
+import { stocks } from '../mocks/stocks';
 
 const productsTable = process.env.PRODUCTS_TABLE;
 const stocksTable = process.env.STOCKS_TABLE;

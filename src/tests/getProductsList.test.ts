@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent } from 'aws-lambda';
-import * as lambda from '../lib/getProductsList';
+import * as lambda from '../product-service/lib/getProductsList';
 import { products } from '../mocks/products';
 
-jest.mock('../lib/helpers', () => ({
+jest.mock('../utils/logger', () => ({
   eventLogger: jest.fn(),
 }));
 

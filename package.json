@@ -5,13 +5,13 @@
   "type": "module",
   "scripts": {
     "lint": "eslint .",
-    "build": "tsc",
+    "tsc": "tsc",
     "cdk:bootstrap": "npx cdk bootstrap",
-    "cdk:deploy": "npm run build && npx cdk deploy",
+    "cdk:deploy": "npm run lint && npm run tsc && npx cdk deploy",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "seed:db": "npx tsx src/scripts/seedDB.ts"
+    "seed:db": "npx tsx ./src/scripts/seedDB.ts"
   },
   "repository": {
     "type": "git",
