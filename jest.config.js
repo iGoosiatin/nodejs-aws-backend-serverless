@@ -1,5 +1,6 @@
 export default {
   preset: 'ts-jest',
+  setupFiles: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
   testMatch: ['**/*.test.ts'],
