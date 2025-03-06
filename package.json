@@ -10,7 +10,8 @@
     "cdk:deploy": "npm run build && npx cdk deploy",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "seed:db": "npx tsx src/scripts/seedDB.ts"
   },
   "repository": {
     "type": "git",
@@ -25,9 +26,12 @@
   "devDependencies": {
     "@aws-cdk/aws-apigatewayv2": "^1.203.0",
     "@aws-cdk/aws-apigatewayv2-integrations": "^1.203.0",
+    "@aws-sdk/client-dynamodb": "^3.758.0",
+    "@aws-sdk/lib-dynamodb": "^3.758.0",
     "@types/aws-lambda": "^8.10.147",
     "@types/jest": "^29.5.14",
     "aws-cdk-lib": "^2.180.0",
+    "dotenv": "^16.4.7",
     "eslint": "^9.20.1",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.3",
