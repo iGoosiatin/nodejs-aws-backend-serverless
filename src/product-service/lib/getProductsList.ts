@@ -1,30 +1,23 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 import { Product } from '../../types/product';
 import { Stock } from '../../types/stock';
 import { eventLogger } from '../../utils/logger';
 import { headers } from '../../utils/http';
+import { environment } from '../../utils/environment';
+import { dynamoDbDocClient } from '../../utils/clients';
 
-const client = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const docClient = DynamoDBDocumentClient.from(client);
+const { PRODUCTS_TABLE, STOCKS_TABLE } = environment;
 
 // exported for testing purposes
 export const getProductsList = async () => {
-  const productsTable = process.env.PRODUCTS_TABLE;
-  const stocksTable = process.env.STOCKS_TABLE;
-
-  if (!(productsTable && stocksTable)) {
-    throw new Error('No PRODUCTS_TABLE and STOCKS_TABLE environment variable found');
-  }
-
-  const productsCommand = new ScanCommand({ TableName: productsTable });
-  const stocksCommand = new ScanCommand({ TableName: stocksTable });
+  const productsCommand = new ScanCommand({ TableName: PRODUCTS_TABLE });
+  const stocksCommand = new ScanCommand({ TableName: STOCKS_TABLE });
 
   const [productsResponse, stocksResponse] = await Promise.all([
-    docClient.send(productsCommand),
-    docClient.send(stocksCommand),
+    dynamoDbDocClient.send(productsCommand),
+    dynamoDbDocClient.send(stocksCommand),
   ]);
 
   const products = (productsResponse.Items || []) as Product[];

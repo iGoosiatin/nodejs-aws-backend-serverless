@@ -1,20 +1,18 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import crypto from 'crypto';
 
 import { Product } from '../../types/product';
 import { Stock } from '../../types/stock';
 import { eventLogger } from '../../utils/logger';
 import { headers } from '../../utils/http';
+import { AvailableProduct, NewProduct } from '../../types';
+import { environment } from '../../utils/environment';
+import { dynamoDbDocClient } from '../../utils/clients';
 
-const client = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const docClient = DynamoDBDocumentClient.from(client);
+const { PRODUCTS_TABLE, STOCKS_TABLE } = environment;
 
-type AvailableProduct = Product & Stock;
-type NewValidProduct = Omit<AvailableProduct, 'id'>;
-
-const isValidNewProduct = (possiblyProduct: unknown): possiblyProduct is NewValidProduct => {
+const isValidNewProduct = (possiblyProduct: unknown): possiblyProduct is NewProduct => {
   if (typeof possiblyProduct !== 'object' || !possiblyProduct) {
     return false;
   }
@@ -65,14 +63,7 @@ const isValidNewProduct = (possiblyProduct: unknown): possiblyProduct is NewVali
 };
 
 // exported for testing purposes
-export const createProduct = async (newProduct: NewValidProduct): Promise<AvailableProduct> => {
-  const productsTable = process.env.PRODUCTS_TABLE;
-  const stocksTable = process.env.STOCKS_TABLE;
-
-  if (!(productsTable && stocksTable)) {
-    throw new Error('No PRODUCTS_TABLE and STOCKS_TABLE environment variable found');
-  }
-
+export const createProduct = async (newProduct: NewProduct): Promise<AvailableProduct> => {
   const id = crypto.randomUUID();
   const { title, description, price, count } = newProduct;
 
@@ -91,20 +82,20 @@ export const createProduct = async (newProduct: NewValidProduct): Promise<Availa
     TransactItems: [
       {
         Put: {
-          TableName: productsTable,
+          TableName: PRODUCTS_TABLE,
           Item: product,
         },
       },
       {
         Put: {
-          TableName: stocksTable,
+          TableName: STOCKS_TABLE,
           Item: stock,
         },
       },
     ],
   });
 
-  await docClient.send(transactionCommand);
+  await dynamoDbDocClient.send(transactionCommand);
 
   return {
     id,
