@@ -4,7 +4,7 @@ import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
 
 export default tseslint.config(
   {
-    ignores: ['build', 'node_modules', 'cdk.out'],
+    ignores: ['build', 'node_modules', 'cdk.out', 'jest.setup.js'],
   },
   eslint.configs.recommended,
   tseslint.configs.recommended,

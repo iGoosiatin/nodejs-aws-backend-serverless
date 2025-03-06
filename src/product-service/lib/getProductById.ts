@@ -1,30 +1,23 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
-
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
 import { Product } from '../../types/product';
 import { Stock } from '../../types/stock';
 import { eventLogger } from '../../utils/logger';
 import { headers } from '../../utils/http';
+import { dynamoDbDocClient } from '../../utils/clients';
 
-const client = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const docClient = DynamoDBDocumentClient.from(client);
+import { environment } from '../../utils/environment';
+
+const { PRODUCTS_TABLE, STOCKS_TABLE } = environment;
 
 // exported for testing purposes
 export const getProductById = async (id: string) => {
-  const productsTable = process.env.PRODUCTS_TABLE;
-  const stocksTable = process.env.STOCKS_TABLE;
-
-  if (!(productsTable && stocksTable)) {
-    throw new Error('No PRODUCTS_TABLE and STOCKS_TABLE environment variable found');
-  }
-
-  const productCommand = new GetCommand({ TableName: productsTable, Key: { id } });
-  const stockCommand = new GetCommand({ TableName: stocksTable, Key: { id } });
+  const productCommand = new GetCommand({ TableName: PRODUCTS_TABLE, Key: { id } });
+  const stockCommand = new GetCommand({ TableName: STOCKS_TABLE, Key: { id } });
 
   const [productResponse, stockResponse] = await Promise.all([
-    docClient.send(productCommand),
-    docClient.send(stockCommand),
+    dynamoDbDocClient.send(productCommand),
+    dynamoDbDocClient.send(stockCommand),
   ]);
 
   const product = productResponse.Item as Product | undefined;

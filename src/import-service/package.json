@@ -1,0 +1,10 @@
+{
+  "name": "nodejs-aws-import-service",
+  "version": "1.0.0",
+  "description": "Rolling Scopes School. Cloud developer course, 2025",
+  "author": "Ilja Gusiatin",
+  "license": "ISC",
+  "dependencies": {
+    "csv-parser": "^3.2.0"
+  }
+}
