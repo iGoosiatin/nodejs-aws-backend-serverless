@@ -1,12 +1,12 @@
 import { APIGatewayProxyEvent } from 'aws-lambda';
-import * as lambda from '../product-service/lib/createProduct';
-import { AvailableProduct, NewProduct } from '../types';
+import * as lambda from '../../product-service/lib/createProduct';
+import { AvailableProduct, NewProduct } from '../../types';
 
-jest.mock('../utils/logger', () => ({
+jest.mock('../../utils/logger', () => ({
   eventLogger: jest.fn(),
 }));
 
-jest.mock('../utils/productSaver', () => ({
+jest.mock('../../utils/productSaver', () => ({
   createProduct: async (newProduct: NewProduct): Promise<AvailableProduct> => ({ id: TEST_UUID, ...newProduct }),
 }));
 
