@@ -8,6 +8,10 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
+
+import { Duration } from 'aws-cdk-lib';
 
 import { environment } from '../../src/utils/environment';
 
@@ -22,6 +26,11 @@ export class ProductsApiStack extends cdk.Stack {
     // Import existing bucket
     const bucket = s3.Bucket.fromBucketAttributes(this, 'ImportS3Bucket', {
       bucketName: environment.IMPORT_BUCKET,
+    });
+
+    // SQS Queue
+    const queue = new sqs.Queue(this, 'ProductCreationQueue', {
+      queueName: 'ProductCreationQueue',
     });
 
     // Create Lambda for getting products list
@@ -67,6 +76,20 @@ export class ProductsApiStack extends cdk.Stack {
     });
 
     // Create Lambda for creating product
+    const createBatchProductFunction = new nodejs.NodejsFunction(this, 'CreateBatchProductHandler', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      entry: 'src/product-service/lib/catalogBatchProcess.ts',
+      handler: 'handler',
+      environment: { ...environment, PRODUCT_CREATION_QUEUE_URL: queue.queueUrl },
+      bundling: {
+        minify: true,
+        sourceMap: false,
+        target: 'es2022',
+        externalModules: ['aws-sdk'],
+      },
+    });
+
+    // Create Lambda for creating product
     const importFunction = new nodejs.NodejsFunction(this, 'ImportProductsFileFunction', {
       runtime: lambda.Runtime.NODEJS_22_X,
       entry: 'src/import-service/lib/importProductsFile.ts',
@@ -85,7 +108,7 @@ export class ProductsApiStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       entry: 'src/import-service/lib/importFileParser.ts',
       handler: 'handler',
-      environment,
+      environment: { ...environment, PRODUCT_CREATION_QUEUE_URL: queue.queueUrl },
       bundling: {
         minify: true,
         sourceMap: false,
@@ -94,6 +117,9 @@ export class ProductsApiStack extends cdk.Stack {
         nodeModules: ['csv-parser'],
       },
     });
+
+    // Grant permissions to Producer Lambda to send messages to SQS
+    queue.grantSendMessages(parserFunction);
 
     // Grant Lambda permissions to access S3
     bucket.grantReadWrite(importFunction);
@@ -118,15 +144,24 @@ export class ProductsApiStack extends cdk.Stack {
       prefix: `${environment.UPLOAD_DIR}/`,
     });
 
+    // Add SQS as event source for Consumer Lambda
+    const eventSource = new lambdaEventSources.SqsEventSource(queue, {
+      batchSize: 5,
+      maxBatchingWindow: Duration.seconds(30),
+      reportBatchItemFailures: true,
+    });
+
+    createBatchProductFunction.addEventSource(eventSource);
+
     // Grant DynamoDB read permissions to the function
     productsTable.grantReadData(getProductsListFunction);
     productsTable.grantReadData(getProductByIdFunction);
     productsTable.grantWriteData(createProductFunction);
-    productsTable.grantWriteData(parserFunction);
+    productsTable.grantWriteData(createBatchProductFunction);
     stocksTable.grantReadData(getProductsListFunction);
     stocksTable.grantReadData(getProductByIdFunction);
     stocksTable.grantWriteData(createProductFunction);
-    stocksTable.grantWriteData(parserFunction);
+    stocksTable.grantWriteData(createBatchProductFunction);
 
     // Create HTTP API
     const productHttpApi = new apigateway.HttpApi(this, 'ProductsHttpApi', {
