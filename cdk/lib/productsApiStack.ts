@@ -10,14 +10,19 @@ import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
-
-import { Duration } from 'aws-cdk-lib';
+import * as sns from 'aws-cdk-lib/aws-sns';
 
 import { environment } from '../../src/utils/environment';
 
+interface ProductsApiStackProps extends cdk.StackProps {
+  productCreationTopic: sns.Topic;
+}
+
 export class ProductsApiStack extends cdk.Stack {
-  constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
+  constructor(scope: cdk.App, id: string, props: ProductsApiStackProps) {
     super(scope, id, props);
+
+    const { productCreationTopic } = props;
 
     // Reference DynamoDB tables
     const productsTable = dynamodb.Table.fromTableName(this, 'ProductsTable', environment.PRODUCTS_TABLE);
@@ -40,8 +45,6 @@ export class ProductsApiStack extends cdk.Stack {
       handler: 'handler',
       environment,
       bundling: {
-        minify: true,
-        sourceMap: false,
         target: 'es2022',
         externalModules: ['aws-sdk'],
       },
@@ -54,8 +57,6 @@ export class ProductsApiStack extends cdk.Stack {
       handler: 'handler',
       environment,
       bundling: {
-        minify: true,
-        sourceMap: false,
         target: 'es2022',
         externalModules: ['aws-sdk'],
       },
@@ -68,8 +69,6 @@ export class ProductsApiStack extends cdk.Stack {
       handler: 'handler',
       environment,
       bundling: {
-        minify: true,
-        sourceMap: false,
         target: 'es2022',
         externalModules: ['aws-sdk'],
       },
@@ -80,10 +79,12 @@ export class ProductsApiStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       entry: 'src/product-service/lib/catalogBatchProcess.ts',
       handler: 'handler',
-      environment: { ...environment, PRODUCT_CREATION_QUEUE_URL: queue.queueUrl },
+      environment: {
+        ...environment,
+        PRODUCT_CREATION_QUEUE_URL: queue.queueUrl,
+        PRODUCT_CREATION_TOPIC_ARN: productCreationTopic.topicArn,
+      },
       bundling: {
-        minify: true,
-        sourceMap: false,
         target: 'es2022',
         externalModules: ['aws-sdk'],
       },
@@ -96,8 +97,6 @@ export class ProductsApiStack extends cdk.Stack {
       handler: 'handler',
       environment,
       bundling: {
-        minify: true,
-        sourceMap: false,
         target: 'es2022',
         externalModules: ['aws-sdk'],
       },
@@ -110,8 +109,6 @@ export class ProductsApiStack extends cdk.Stack {
       handler: 'handler',
       environment: { ...environment, PRODUCT_CREATION_QUEUE_URL: queue.queueUrl },
       bundling: {
-        minify: true,
-        sourceMap: false,
         target: 'es2022',
         externalModules: ['aws-sdk'],
         nodeModules: ['csv-parser'],
@@ -147,11 +144,13 @@ export class ProductsApiStack extends cdk.Stack {
     // Add SQS as event source for Consumer Lambda
     const eventSource = new lambdaEventSources.SqsEventSource(queue, {
       batchSize: 5,
-      maxBatchingWindow: Duration.seconds(30),
+      maxBatchingWindow: cdk.Duration.seconds(30),
       reportBatchItemFailures: true,
     });
 
     createBatchProductFunction.addEventSource(eventSource);
+
+    productCreationTopic.grantPublish(createBatchProductFunction);
 
     // Grant DynamoDB read permissions to the function
     productsTable.grantReadData(getProductsListFunction);
