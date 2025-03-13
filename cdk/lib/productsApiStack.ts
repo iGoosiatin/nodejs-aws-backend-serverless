@@ -5,15 +5,11 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayIntegrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
+import * as iam from 'aws-cdk-lib/aws-iam';
 
-if (!(process.env.PRODUCTS_TABLE && process.env.STOCKS_TABLE)) {
-  throw new Error('No PRODUCTS_TABLE and STOCKS_TABLE environment variable found');
-}
-
-const environment = {
-  PRODUCTS_TABLE: process.env.PRODUCTS_TABLE,
-  STOCKS_TABLE: process.env.STOCKS_TABLE,
-};
+import { environment } from '../../src/utils/environment';
 
 export class ProductsApiStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
@@ -22,6 +18,11 @@ export class ProductsApiStack extends cdk.Stack {
     // Reference DynamoDB tables
     const productsTable = dynamodb.Table.fromTableName(this, 'ProductsTable', environment.PRODUCTS_TABLE);
     const stocksTable = dynamodb.Table.fromTableName(this, 'StocksTable', environment.STOCKS_TABLE);
+
+    // Import existing bucket
+    const bucket = s3.Bucket.fromBucketAttributes(this, 'ImportS3Bucket', {
+      bucketName: environment.IMPORT_BUCKET,
+    });
 
     // Create Lambda for getting products list
     const getProductsListFunction = new nodejs.NodejsFunction(this, 'GetProductsListHandler', {
@@ -65,20 +66,84 @@ export class ProductsApiStack extends cdk.Stack {
       },
     });
 
+    // Create Lambda for creating product
+    const importFunction = new nodejs.NodejsFunction(this, 'ImportProductsFileFunction', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      entry: 'src/import-service/lib/importProductsFile.ts',
+      handler: 'handler',
+      environment,
+      bundling: {
+        minify: true,
+        sourceMap: false,
+        target: 'es2022',
+        externalModules: ['aws-sdk'],
+      },
+    });
+
+    // Create file parser lambda function
+    const parserFunction = new nodejs.NodejsFunction(this, 'ProductsParserFunction', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      entry: 'src/import-service/lib/importFileParser.ts',
+      handler: 'handler',
+      environment,
+      bundling: {
+        minify: true,
+        sourceMap: false,
+        target: 'es2022',
+        externalModules: ['aws-sdk'],
+        nodeModules: ['csv-parser'],
+      },
+    });
+
+    // Grant Lambda permissions to access S3
+    bucket.grantReadWrite(importFunction);
+
+    // Grant permissions to read from uploaded folder
+    const s3ParserPolicy = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:ListBucket'],
+      resources: [
+        // Permission for the bucket itself (for ListBucket)
+        bucket.bucketArn,
+        // Permissions for objects in both directories
+        `${bucket.bucketArn}/${environment.UPLOAD_DIR}/*`,
+        `${bucket.bucketArn}/${environment.PARSED_DIR}/*`,
+      ],
+    });
+
+    parserFunction.addToRolePolicy(s3ParserPolicy);
+
+    // Add S3 notification for uploaded files
+    bucket.addEventNotification(s3.EventType.OBJECT_CREATED, new s3n.LambdaDestination(parserFunction), {
+      prefix: `${environment.UPLOAD_DIR}/`,
+    });
+
     // Grant DynamoDB read permissions to the function
     productsTable.grantReadData(getProductsListFunction);
     productsTable.grantReadData(getProductByIdFunction);
     productsTable.grantWriteData(createProductFunction);
+    productsTable.grantWriteData(parserFunction);
     stocksTable.grantReadData(getProductsListFunction);
     stocksTable.grantReadData(getProductByIdFunction);
     stocksTable.grantWriteData(createProductFunction);
+    stocksTable.grantWriteData(parserFunction);
 
     // Create HTTP API
-    const httpApi = new apigateway.HttpApi(this, 'ProductsHttpApi', {
+    const productHttpApi = new apigateway.HttpApi(this, 'ProductsHttpApi', {
       apiName: 'products-api',
       description: 'HTTP API for Products Service',
       corsPreflight: {
         allowMethods: [apigateway.CorsHttpMethod.GET, apigateway.CorsHttpMethod.POST],
+        allowOrigins: ['*'],
+        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key', 'X-Amz-Security-Token'],
+      },
+    });
+
+    const productImportHttpApi = new apigateway.HttpApi(this, 'ProductImportHttpApi', {
+      apiName: 'import-api',
+      description: 'HTTP API for Product Import Service',
+      corsPreflight: {
+        allowMethods: [apigateway.CorsHttpMethod.GET],
         allowOrigins: ['*'],
         allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key', 'X-Amz-Security-Token'],
       },
@@ -100,28 +165,44 @@ export class ProductsApiStack extends cdk.Stack {
       createProductFunction,
     );
 
+    const importProductsFileIntegration = new apigatewayIntegrations.HttpLambdaIntegration(
+      'ImportProductsFileIntegration',
+      importFunction,
+    );
+
     // Add routes
-    httpApi.addRoutes({
+    productHttpApi.addRoutes({
       path: '/products',
       methods: [apigateway.HttpMethod.GET],
       integration: getProductsListIntegration,
     });
 
-    httpApi.addRoutes({
+    productHttpApi.addRoutes({
       path: '/products',
       methods: [apigateway.HttpMethod.POST],
       integration: createProductIntegration,
     });
 
-    httpApi.addRoutes({
+    productHttpApi.addRoutes({
       path: '/products/{productId}',
       methods: [apigateway.HttpMethod.GET],
       integration: getProductByIdIntegration,
     });
 
+    productImportHttpApi.addRoutes({
+      path: '/import',
+      methods: [apigateway.HttpMethod.GET],
+      integration: importProductsFileIntegration,
+    });
+
     // Output the API URL
-    new cdk.CfnOutput(this, 'ApiUrl', {
-      value: httpApi.url ?? '',
+    new cdk.CfnOutput(this, 'Product HTTP Api URL', {
+      value: productHttpApi.url ?? '',
+    });
+
+    // Output the API URL
+    new cdk.CfnOutput(this, 'Import HTTP Api URL', {
+      value: productImportHttpApi.url ?? '',
     });
   }
 }

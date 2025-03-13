@@ -14,7 +14,7 @@ if (!(productsTable && stocksTable)) {
 
 // Initialize the DynamoDB client
 const client = new DynamoDBClient({ region }); // adjust region as needed
-const docClient = DynamoDBDocumentClient.from(client);
+const dynamoDbDocClient = DynamoDBDocumentClient.from(client);
 
 // DynamoDB can process up to 25 items in one batch
 const BATCH_SIZE = 25;
@@ -35,7 +35,7 @@ async function batchWriteItems(table: string, items: Array<Record<string, unknow
       };
 
       const command = new BatchWriteCommand(params);
-      await docClient.send(command);
+      await dynamoDbDocClient.send(command);
 
       console.log(`Processed batch of ${batch.length} products`);
     }
