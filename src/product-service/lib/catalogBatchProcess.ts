@@ -15,7 +15,7 @@ if (!PRODUCT_CREATION_TOPIC_ARN) {
   throw new Error('PRODUCT_CREATION_TOPIC_ARN environment variable is not set');
 }
 
-async function handleRecord(record: SQSRecord): Promise<AvailableProduct> {
+export async function handleRecord(record: SQSRecord): Promise<AvailableProduct> {
   const validProduct = getValidNewProduct(JSON.parse(record.body));
   return createProduct(validProduct);
 }

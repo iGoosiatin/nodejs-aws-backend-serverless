@@ -2,15 +2,20 @@ import { S3Event, S3EventRecord } from 'aws-lambda';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 import { handler } from '../../import-service/lib/importFileParser';
-import { s3Client } from '../../utils/clients';
-import { getValidNewProduct } from '../../utils/validators';
-import { createProduct } from '../../utils/productSaver';
+import { s3Client, sqsClient } from '../../utils/clients';
 import { environment } from '../../utils/environment';
 
 // Mocks
-jest.mock('../../utils/clients');
-jest.mock('../../utils/validators');
-jest.mock('../../utils/productSaver');
+jest.mock('../../utils/clients', () => {
+  return {
+    s3Client: {
+      send: jest.fn(),
+    },
+    sqsClient: {
+      send: jest.fn(),
+    },
+  };
+});
 
 const { IMPORT_BUCKET, UPLOAD_DIR, PARSED_DIR } = environment;
 
@@ -31,12 +36,7 @@ describe('importFileParser handler', () => {
   const mockProduct = {
     title: 'Test Product',
     description: 'Test Description',
-    price: 100,
-  };
-
-  const mockValidProduct = {
-    ...mockProduct,
-    count: 1,
+    price: '100',
   };
 
   // Updated createReadStream function to properly simulate CSV data
@@ -70,29 +70,19 @@ describe('importFileParser handler', () => {
       return {};
     });
 
-    // Mock validator and product saver
-    (getValidNewProduct as jest.Mock).mockReturnValue(mockValidProduct);
-    (createProduct as jest.Mock).mockResolvedValue({ id: '1', ...mockValidProduct });
-
     // Mock logger
     jest.spyOn(console, 'log').mockImplementation();
+    jest.spyOn(console, 'error').mockImplementation();
   });
 
   it('should process CSV file successfully', async () => {
     await handler(mockS3Event);
 
-    // Wait for all promises to resolve
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Verify product processing
-    expect(getValidNewProduct).toHaveBeenCalledWith(
+    expect(sqsClient.send).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: mockProduct.title,
-        description: mockProduct.description,
-        price: mockProduct.price.toString(), // CSV parser will return numbers as strings
+        input: { QueueUrl: process.env.PRODUCT_CREATION_QUEUE_URL, MessageBody: JSON.stringify(mockProduct) },
       }),
     );
-    expect(createProduct).toHaveBeenCalledWith(mockValidProduct);
 
     // Verify S3 operations
     expect(s3Client.send).toHaveBeenCalledWith(expect.any(GetObjectCommand));
@@ -115,19 +105,6 @@ describe('importFileParser handler', () => {
     );
   });
 
-  it('should handle invalid product data', async () => {
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    (getValidNewProduct as jest.Mock).mockImplementation(() => {
-      throw new Error('Invalid product');
-    });
-
-    await handler(mockS3Event);
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    expect(consoleErrorSpy).toHaveBeenCalledWith('Error processing product:', 'Invalid product');
-    expect(createProduct).not.toHaveBeenCalled();
-  });
-
   it('should handle S3 read errors', async () => {
     (s3Client.send as jest.Mock).mockRejectedValueOnce(new Error('S3 read error'));
 
@@ -141,7 +118,6 @@ describe('importFileParser handler', () => {
       .mockRejectedValueOnce(new Error('File move error'));
 
     await handler(mockS3Event);
-    await new Promise(resolve => setTimeout(resolve, 500));
 
     expect(consoleErrorSpy).toHaveBeenCalledWith('Error moving file:', expect.any(Error));
   });
