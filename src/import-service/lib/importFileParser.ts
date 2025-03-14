@@ -3,26 +3,23 @@ import { GetObjectCommand, CopyObjectCommand, DeleteObjectCommand } from '@aws-s
 import csv from 'csv-parser';
 import { Readable } from 'stream';
 import { environment } from '../../utils/environment';
-import { NewProduct } from '../../types';
-import { s3Client } from '../../utils/clients';
-import { getValidNewProduct } from '../../utils/validators';
-import { createProduct } from '../../utils/productSaver';
+import { s3Client, sqsClient } from '../../utils/clients';
+import { SendMessageCommand } from '@aws-sdk/client-sqs';
+
+const PRODUCT_CREATION_QUEUE_URL = process.env.PRODUCT_CREATION_QUEUE_URL;
+if (!PRODUCT_CREATION_QUEUE_URL) {
+  throw new Error('PRODUCT_CREATION_QUEUE_URL environment variable is not set');
+}
 
 const { UPLOAD_DIR, PARSED_DIR } = environment;
 
 const handleProduct = async (product: unknown): Promise<void> => {
-  console.log('Product to process:', product);
-  let validProduct: NewProduct;
-  try {
-    validProduct = getValidNewProduct(product);
-    console.log('Valid product to be saved:', validProduct);
-  } catch (error) {
-    console.error('Error processing product:', (error as Error).message);
-    return;
-  }
+  const command = new SendMessageCommand({
+    QueueUrl: process.env.PRODUCT_CREATION_QUEUE_URL,
+    MessageBody: JSON.stringify(product),
+  });
 
-  const savedProduct = await createProduct(validProduct);
-  console.log('Saved product:', savedProduct);
+  await sqsClient.send(command);
 };
 
 const handleFile = async (Bucket: string, Key: string): Promise<void> => {
