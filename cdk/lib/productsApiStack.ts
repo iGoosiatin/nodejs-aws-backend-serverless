@@ -7,23 +7,43 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 
 import { environment } from '../../src/utils/environment';
 
+const { PRODUCTS_TABLE, STOCKS_TABLE, PRODUCT_CREATION_NOTIF_ADMIN_EMAIL, PRODUCT_CREATION_NOTIF_EMAIL } = environment;
+
 interface ProductsApiStackProps extends cdk.StackProps {
   productCreationQueue: sqs.Queue;
-  productCreationTopic: sns.Topic;
 }
 
 export class ProductsApiStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props: ProductsApiStackProps) {
     super(scope, id, props);
 
-    const { productCreationQueue, productCreationTopic } = props;
+    const { productCreationQueue } = props;
 
     // Reference DynamoDB tables
-    const productsTable = dynamodb.Table.fromTableName(this, 'ProductsTable', environment.PRODUCTS_TABLE);
-    const stocksTable = dynamodb.Table.fromTableName(this, 'StocksTable', environment.STOCKS_TABLE);
+    const productsTable = dynamodb.Table.fromTableName(this, 'ProductsTable', PRODUCTS_TABLE);
+    const stocksTable = dynamodb.Table.fromTableName(this, 'StocksTable', STOCKS_TABLE);
+
+    // Create SNS topic
+    const productCreationTopic = new sns.Topic(this, 'createProductTopic', {
+      topicName: 'createProductTopic',
+      displayName: 'Product Creation Notifications',
+    });
+
+    productCreationTopic.addSubscription(new subscriptions.EmailSubscription(PRODUCT_CREATION_NOTIF_EMAIL));
+
+    productCreationTopic.addSubscription(
+      new subscriptions.EmailSubscription(PRODUCT_CREATION_NOTIF_ADMIN_EMAIL, {
+        filterPolicy: {
+          status: sns.SubscriptionFilter.stringFilter({
+            allowlist: ['partial', 'error'],
+          }),
+        },
+      }),
+    );
 
     // Create Lambda for getting products list
     const getProductsListFunction = new nodejs.NodejsFunction(this, 'GetProductsListHandler', {
