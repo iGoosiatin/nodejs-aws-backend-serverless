@@ -7,18 +7,20 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as apigateway_authorizers from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 
 import { environment } from '../../src/utils/environment';
 
 interface ImportApiStackProps extends cdk.StackProps {
   productCreationQueue: sqs.Queue;
+  basicAuthorizer: apigateway_authorizers.HttpLambdaAuthorizer;
 }
 
 export class ImportApiStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props: ImportApiStackProps) {
     super(scope, id, props);
 
-    const { productCreationQueue } = props;
+    const { productCreationQueue, basicAuthorizer } = props;
 
     // Import existing bucket
     const bucket = s3.Bucket.fromBucketAttributes(this, 'ImportS3Bucket', {
@@ -95,6 +97,7 @@ export class ImportApiStack extends cdk.Stack {
       path: '/import',
       methods: [apigateway.HttpMethod.GET],
       integration: importProductsFileIntegration,
+      authorizer: basicAuthorizer,
     });
 
     // Output the API URL
