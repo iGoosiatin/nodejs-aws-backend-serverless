@@ -1,28 +1,49 @@
-import 'dotenv/config';
 import * as cdk from 'aws-cdk-lib';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayIntegrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
-import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambdaEventSources from 'aws-cdk-lib/aws-lambda-event-sources';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 
 import { environment } from '../../src/utils/environment';
 
+const { PRODUCTS_TABLE, STOCKS_TABLE, PRODUCT_CREATION_NOTIF_ADMIN_EMAIL, PRODUCT_CREATION_NOTIF_EMAIL } = environment;
+
+interface ProductsApiStackProps extends cdk.StackProps {
+  productCreationQueue: sqs.Queue;
+}
+
 export class ProductsApiStack extends cdk.Stack {
-  constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
+  constructor(scope: cdk.App, id: string, props: ProductsApiStackProps) {
     super(scope, id, props);
 
-    // Reference DynamoDB tables
-    const productsTable = dynamodb.Table.fromTableName(this, 'ProductsTable', environment.PRODUCTS_TABLE);
-    const stocksTable = dynamodb.Table.fromTableName(this, 'StocksTable', environment.STOCKS_TABLE);
+    const { productCreationQueue } = props;
 
-    // Import existing bucket
-    const bucket = s3.Bucket.fromBucketAttributes(this, 'ImportS3Bucket', {
-      bucketName: environment.IMPORT_BUCKET,
+    // Reference DynamoDB tables
+    const productsTable = dynamodb.Table.fromTableName(this, 'ProductsTable', PRODUCTS_TABLE);
+    const stocksTable = dynamodb.Table.fromTableName(this, 'StocksTable', STOCKS_TABLE);
+
+    // Create SNS topic
+    const productCreationTopic = new sns.Topic(this, 'createProductTopic', {
+      topicName: 'createProductTopic',
+      displayName: 'Product Creation Notifications',
     });
+
+    productCreationTopic.addSubscription(new subscriptions.EmailSubscription(PRODUCT_CREATION_NOTIF_EMAIL));
+
+    productCreationTopic.addSubscription(
+      new subscriptions.EmailSubscription(PRODUCT_CREATION_NOTIF_ADMIN_EMAIL, {
+        filterPolicy: {
+          status: sns.SubscriptionFilter.stringFilter({
+            allowlist: ['partial', 'error'],
+          }),
+        },
+      }),
+    );
 
     // Create Lambda for getting products list
     const getProductsListFunction = new nodejs.NodejsFunction(this, 'GetProductsListHandler', {
@@ -31,8 +52,6 @@ export class ProductsApiStack extends cdk.Stack {
       handler: 'handler',
       environment,
       bundling: {
-        minify: true,
-        sourceMap: false,
         target: 'es2022',
         externalModules: ['aws-sdk'],
       },
@@ -45,8 +64,6 @@ export class ProductsApiStack extends cdk.Stack {
       handler: 'handler',
       environment,
       bundling: {
-        minify: true,
-        sourceMap: false,
         target: 'es2022',
         externalModules: ['aws-sdk'],
       },
@@ -59,74 +76,47 @@ export class ProductsApiStack extends cdk.Stack {
       handler: 'handler',
       environment,
       bundling: {
-        minify: true,
-        sourceMap: false,
         target: 'es2022',
         externalModules: ['aws-sdk'],
       },
     });
 
     // Create Lambda for creating product
-    const importFunction = new nodejs.NodejsFunction(this, 'ImportProductsFileFunction', {
+    const createBatchProductFunction = new nodejs.NodejsFunction(this, 'CreateBatchProductHandler', {
       runtime: lambda.Runtime.NODEJS_22_X,
-      entry: 'src/import-service/lib/importProductsFile.ts',
+      entry: 'src/product-service/lib/catalogBatchProcess.ts',
       handler: 'handler',
-      environment,
+      environment: {
+        ...environment,
+        PRODUCT_CREATION_QUEUE_URL: productCreationQueue.queueUrl,
+        PRODUCT_CREATION_TOPIC_ARN: productCreationTopic.topicArn,
+      },
       bundling: {
-        minify: true,
-        sourceMap: false,
         target: 'es2022',
         externalModules: ['aws-sdk'],
       },
     });
 
-    // Create file parser lambda function
-    const parserFunction = new nodejs.NodejsFunction(this, 'ProductsParserFunction', {
-      runtime: lambda.Runtime.NODEJS_22_X,
-      entry: 'src/import-service/lib/importFileParser.ts',
-      handler: 'handler',
-      environment,
-      bundling: {
-        minify: true,
-        sourceMap: false,
-        target: 'es2022',
-        externalModules: ['aws-sdk'],
-        nodeModules: ['csv-parser'],
-      },
+    // Add SQS as event source for Consumer Lambda
+    const eventSource = new lambdaEventSources.SqsEventSource(productCreationQueue, {
+      batchSize: 5,
+      maxBatchingWindow: cdk.Duration.seconds(30),
+      reportBatchItemFailures: true,
     });
 
-    // Grant Lambda permissions to access S3
-    bucket.grantReadWrite(importFunction);
+    createBatchProductFunction.addEventSource(eventSource);
 
-    // Grant permissions to read from uploaded folder
-    const s3ParserPolicy = new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:ListBucket'],
-      resources: [
-        // Permission for the bucket itself (for ListBucket)
-        bucket.bucketArn,
-        // Permissions for objects in both directories
-        `${bucket.bucketArn}/${environment.UPLOAD_DIR}/*`,
-        `${bucket.bucketArn}/${environment.PARSED_DIR}/*`,
-      ],
-    });
-
-    parserFunction.addToRolePolicy(s3ParserPolicy);
-
-    // Add S3 notification for uploaded files
-    bucket.addEventNotification(s3.EventType.OBJECT_CREATED, new s3n.LambdaDestination(parserFunction), {
-      prefix: `${environment.UPLOAD_DIR}/`,
-    });
+    productCreationTopic.grantPublish(createBatchProductFunction);
 
     // Grant DynamoDB read permissions to the function
     productsTable.grantReadData(getProductsListFunction);
     productsTable.grantReadData(getProductByIdFunction);
     productsTable.grantWriteData(createProductFunction);
-    productsTable.grantWriteData(parserFunction);
+    productsTable.grantWriteData(createBatchProductFunction);
     stocksTable.grantReadData(getProductsListFunction);
     stocksTable.grantReadData(getProductByIdFunction);
     stocksTable.grantWriteData(createProductFunction);
-    stocksTable.grantWriteData(parserFunction);
+    stocksTable.grantWriteData(createBatchProductFunction);
 
     // Create HTTP API
     const productHttpApi = new apigateway.HttpApi(this, 'ProductsHttpApi', {
@@ -134,16 +124,6 @@ export class ProductsApiStack extends cdk.Stack {
       description: 'HTTP API for Products Service',
       corsPreflight: {
         allowMethods: [apigateway.CorsHttpMethod.GET, apigateway.CorsHttpMethod.POST],
-        allowOrigins: ['*'],
-        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key', 'X-Amz-Security-Token'],
-      },
-    });
-
-    const productImportHttpApi = new apigateway.HttpApi(this, 'ProductImportHttpApi', {
-      apiName: 'import-api',
-      description: 'HTTP API for Product Import Service',
-      corsPreflight: {
-        allowMethods: [apigateway.CorsHttpMethod.GET],
         allowOrigins: ['*'],
         allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key', 'X-Amz-Security-Token'],
       },
@@ -165,11 +145,6 @@ export class ProductsApiStack extends cdk.Stack {
       createProductFunction,
     );
 
-    const importProductsFileIntegration = new apigatewayIntegrations.HttpLambdaIntegration(
-      'ImportProductsFileIntegration',
-      importFunction,
-    );
-
     // Add routes
     productHttpApi.addRoutes({
       path: '/products',
@@ -189,20 +164,9 @@ export class ProductsApiStack extends cdk.Stack {
       integration: getProductByIdIntegration,
     });
 
-    productImportHttpApi.addRoutes({
-      path: '/import',
-      methods: [apigateway.HttpMethod.GET],
-      integration: importProductsFileIntegration,
-    });
-
     // Output the API URL
     new cdk.CfnOutput(this, 'Product HTTP Api URL', {
       value: productHttpApi.url ?? '',
-    });
-
-    // Output the API URL
-    new cdk.CfnOutput(this, 'Import HTTP Api URL', {
-      value: productImportHttpApi.url ?? '',
     });
   }
 }
