@@ -27,6 +27,7 @@ export class AuthStack extends cdk.Stack {
     this.basicAuthorizer = new apigateway_authorizers.HttpLambdaAuthorizer('BasicAuthorizer', authorizerFunction, {
       authorizerName: 'basic-authorizer',
       responseTypes: [apigateway_authorizers.HttpLambdaResponseType.IAM],
+      resultsCacheTtl: cdk.Duration.seconds(0),
     });
   }
 }

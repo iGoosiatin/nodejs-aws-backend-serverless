@@ -81,7 +81,6 @@ export class ImportApiStack extends cdk.Stack {
     const productImportHttpApi = new apigateway.HttpApi(this, 'ProductImportHttpApi', {
       apiName: 'import-api',
       description: 'HTTP API for Product Import Service',
-      defaultAuthorizationScopes: [''],
       corsPreflight: {
         allowMethods: [apigateway.CorsHttpMethod.GET],
         allowOrigins: ['*'],

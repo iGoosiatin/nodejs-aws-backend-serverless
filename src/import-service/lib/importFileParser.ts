@@ -28,18 +28,14 @@ const handleFile = async (Bucket: string, Key: string): Promise<void> => {
   const stream = response.Body as Readable;
 
   return new Promise((resolve, reject) => {
-    const promises: Promise<void>[] = [];
-
     stream.pipe(
-      csv().on('data', record => {
-        promises.push(handleProduct(record));
+      csv().on('data', async record => {
+        await handleProduct(record);
       }),
     );
 
     stream.on('error', reject);
     stream.on('end', async () => {
-      await Promise.all(promises);
-
       try {
         // Move file to parsed folder
         const newKey = Key.replace(UPLOAD_DIR, PARSED_DIR);
@@ -59,6 +55,8 @@ const handleFile = async (Bucket: string, Key: string): Promise<void> => {
             Key,
           }),
         );
+
+        resolve();
       } catch (error) {
         console.error('Error moving file:', error);
       }

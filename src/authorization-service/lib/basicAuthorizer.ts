@@ -27,35 +27,20 @@ const generatePolicy = (
 };
 
 export const handler = async (event: APIGatewayRequestAuthorizerEvent): Promise<APIGatewayAuthorizerResult> => {
-  const authorizationHeader = event.headers?.Authorization;
-
+  const authorizationHeader = Object.entries(event.headers || {}).find(
+    ([key]) => key.toLowerCase() === 'authorization',
+  )?.[1];
   // Return 401 if Authorization header is missing
   if (!authorizationHeader) {
     throw new Error('Unauthorized');
   }
 
-  const [authType, encodedCredentials] = authorizationHeader.split(' ');
-
-  // Return 401 if Authorization header is malformed
-  if (authType !== 'Basic' || !encodedCredentials) {
-    throw new Error('Unauthorized');
-  }
-
-  const plainCredentials = Buffer.from(encodedCredentials, 'base64').toString().split(':');
-
-  if (plainCredentials.length !== 2) {
-    throw new Error('Unauthorized');
-  }
-
-  const [username, password] = plainCredentials;
-
-  if (!username || !password) {
-    throw new Error('Unauthorized');
-  }
+  const encodedCredentials = authorizationHeader.split(' ')[1];
+  const [username, password] = Buffer.from(encodedCredentials, 'base64').toString().split(':');
 
   // Return 403 if credentials are invalid
-  if (process.env[username] === password) {
-    return generatePolicy('user', 'Deny', event.methodArn, {
+  if (!password || process.env[username] !== password) {
+    return generatePolicy(username, 'Deny', event.methodArn, {
       username,
       loginTime: Date.now(),
     });
