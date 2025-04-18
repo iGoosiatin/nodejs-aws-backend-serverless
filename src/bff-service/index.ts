@@ -4,8 +4,24 @@ import dotenv from 'dotenv';
 
 dotenv.config({ path: './.env' });
 
+type Cache = {
+  data: string;
+  headers: http.IncomingHttpHeaders;
+  timestamp: number;
+  statusCode: number;
+};
+
+const cacheMap = new Map<string, Cache>();
+const TWO_MINUTES = 120000; // 1000 * 60 * 2;
+const TEN_MIMUTES = 600000; // 1000 * 60 * 10;
+
+const isCacheble = (method: string, routeSegment: string, statusCode = 200) => {
+  return method === 'GET' && routeSegment === 'product' && statusCode === 200;
+};
+
 const server = http.createServer((req, res) => {
   const reqUrl = req.url || '';
+  const method = req.method || '';
   const [path, searchParams] = reqUrl.split('&');
   const [routeSegment, ...segments] = path.replace(/^\//, '').split('/');
   const route = process.env[`${routeSegment.toUpperCase()}_API_URL`];
@@ -14,6 +30,20 @@ const server = http.createServer((req, res) => {
     res.writeHead(502);
     res.end('Cannot process request');
     return;
+  }
+
+  // Cache is available only for product service GET requests
+  if (isCacheble(method, routeSegment)) {
+    const cache = cacheMap.get(reqUrl);
+
+    if (cache) {
+      const now = Date.now();
+      if (now - cache.timestamp < TWO_MINUTES) {
+        res.writeHead(cache.statusCode, cache.headers);
+        res.end(cache.data);
+        return;
+      }
+    }
   }
 
   const targetUrl = new URL(
@@ -27,7 +57,7 @@ const server = http.createServer((req, res) => {
     servername: targetUrl.hostname,
     path: targetUrl.pathname + targetUrl.search,
     port: isHttps ? 443 : 80,
-    method: req.method,
+    method,
     headers: {
       ...req.headers,
       host: targetUrl.hostname,
@@ -48,10 +78,29 @@ const server = http.createServer((req, res) => {
 
   // Create the proxy request
   const proxyReq = request(options, proxyRes => {
-    // Set response headers
-    res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
-    // Pipe the response from target to client
-    proxyRes.pipe(res);
+    // Collect the entire response
+    let data = '';
+
+    proxyRes.on('data', chunk => {
+      data += chunk;
+    });
+
+    proxyRes.on('end', () => {
+      const statusCode = proxyRes.statusCode || 200;
+
+      res.writeHead(statusCode, proxyRes.headers);
+      res.end(data);
+
+      // Don't cache server errors
+      if (isCacheble(method, routeSegment, statusCode)) {
+        cacheMap.set(reqUrl, {
+          data,
+          headers: proxyRes.headers,
+          statusCode,
+          timestamp: Date.now(),
+        });
+      }
+    });
   });
 
   // Handle errors
@@ -62,7 +111,7 @@ const server = http.createServer((req, res) => {
   });
 
   // Handle request body for POST, PUT, PATCH methods
-  if (['POST', 'PUT', 'PATCH'].includes(req.method || '')) {
+  if (['POST', 'PUT', 'PATCH'].includes(method)) {
     let body = '';
 
     req.on('data', chunk => {
@@ -85,10 +134,22 @@ const server = http.createServer((req, res) => {
       proxyReq.end();
     });
   } else {
-    // For GET, DELETE, etc., just end the request
+    // Reset Content-Length to prevent request timeout. Body is dropped anyway.
+    proxyReq.setHeader('Content-Length', 0);
     proxyReq.end();
   }
 });
+
+// Add cache cleanup interval
+setInterval(() => {
+  const now = Date.now();
+
+  for (const [key, value] of cacheMap.entries()) {
+    if (now - value.timestamp > TWO_MINUTES) {
+      cacheMap.delete(key);
+    }
+  }
+}, TEN_MIMUTES);
 
 // Start the proxy server
 const BFF_PORT = process.env.BFF_PORT || 80;
