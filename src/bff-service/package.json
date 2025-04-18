@@ -1,0 +1,15 @@
+{
+  "name": "bff-service",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "tsx index.ts"
+  },
+  "author": "Ilja Gusiatin",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "dotenv": "^16.5.0",
+    "tsx": "^4.19.3"
+  }
+}
