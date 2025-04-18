@@ -43,7 +43,7 @@ const server = http.createServer((req, res) => {
       if (now - cache.timestamp < TWO_MINUTES) {
         res.writeHead(cache.statusCode, cache.headers);
         res.end(cache.data);
-        console.log('Served for cache:', method, reqUrl);
+        console.log('Served cache for:', method, reqUrl);
         return;
       }
     }
@@ -93,6 +93,7 @@ const server = http.createServer((req, res) => {
       const statusCode = proxyRes.statusCode || 200;
       res.writeHead(statusCode, proxyRes.headers);
       res.end(responseBuffer);
+      console.log('Response', statusCode, method, reqUrl);
 
       // Don't cache server errors
       if (isCacheble(method, routeSegment, statusCode)) {
@@ -108,7 +109,7 @@ const server = http.createServer((req, res) => {
 
   // Handle errors
   proxyReq.on('error', err => {
-    console.error('Proxy Request Error:', err);
+    console.error('Proxy Request Error:', err, method, reqUrl);
     res.writeHead(500);
     res.end('Proxy Error');
   });
