@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config({ path: './.env' });
 
 type Cache = {
-  data: string;
+  data: Buffer;
   headers: http.IncomingHttpHeaders;
   timestamp: number;
   statusCode: number;
@@ -79,22 +79,22 @@ const server = http.createServer((req, res) => {
   // Create the proxy request
   const proxyReq = request(options, proxyRes => {
     // Collect the entire response
-    let data = '';
+    const chunks: Buffer[] = [];
 
     proxyRes.on('data', chunk => {
-      data += chunk;
+      chunks.push(chunk);
     });
 
     proxyRes.on('end', () => {
+      const responseBuffer = Buffer.concat(chunks);
       const statusCode = proxyRes.statusCode || 200;
-
       res.writeHead(statusCode, proxyRes.headers);
-      res.end(data);
+      res.end(responseBuffer);
 
       // Don't cache server errors
       if (isCacheble(method, routeSegment, statusCode)) {
         cacheMap.set(reqUrl, {
-          data,
+          data: responseBuffer,
           headers: proxyRes.headers,
           statusCode,
           timestamp: Date.now(),
