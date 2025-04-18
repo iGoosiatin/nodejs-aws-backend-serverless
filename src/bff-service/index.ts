@@ -26,6 +26,8 @@ const server = http.createServer((req, res) => {
   const [routeSegment, ...segments] = path.replace(/^\//, '').split('/');
   const route = process.env[`${routeSegment.toUpperCase()}_API_URL`];
 
+  console.log('Received:', method, reqUrl);
+
   if (!route) {
     res.writeHead(502);
     res.end('Cannot process request');
@@ -41,6 +43,7 @@ const server = http.createServer((req, res) => {
       if (now - cache.timestamp < TWO_MINUTES) {
         res.writeHead(cache.statusCode, cache.headers);
         res.end(cache.data);
+        console.log('Served for cache:', method, reqUrl);
         return;
       }
     }
@@ -142,6 +145,10 @@ const server = http.createServer((req, res) => {
 
 // Add cache cleanup interval
 setInterval(() => {
+  if (cacheMap.size === 0) {
+    return;
+  }
+
   const now = Date.now();
 
   for (const [key, value] of cacheMap.entries()) {
@@ -149,6 +156,8 @@ setInterval(() => {
       cacheMap.delete(key);
     }
   }
+
+  console.log('Cache cleaned up completed. Cache size:', cacheMap.size);
 }, TEN_MIMUTES);
 
 // Start the proxy server
